@@ -1,13 +1,16 @@
 package main
 
 import (
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 )
 
 var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
 type Page struct {
 	Title string
@@ -36,7 +39,10 @@ func main() {
 }
 
 func viewHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title := request.URL.Path[len("/view/"):]
+	title, err := getTitle(responseWriter, request)
+	if err != nil {
+		return
+	}
 	page, err := loadPage(title)
 	if err != nil {
 		http.Redirect(responseWriter, request, "/edit/"+title, http.StatusFound)
@@ -46,7 +52,10 @@ func viewHandler(responseWriter http.ResponseWriter, request *http.Request) {
 }
 
 func editHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title := request.URL.Path[len("/edit/"):]
+	title, err := getTitle(responseWriter, request)
+	if err != nil {
+		return
+	}
 	page, err := loadPage(title)
 	if err != nil {
 		page = &Page{Title: title}
@@ -55,10 +64,13 @@ func editHandler(responseWriter http.ResponseWriter, request *http.Request) {
 }
 
 func saveHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title := request.URL.Path[len("/save/"):]
+	title, err := getTitle(responseWriter, request)
+	if err != nil {
+		return
+	}
 	body := request.FormValue("body")
 	page := &Page{Title: title, Body: []byte(body)}
-	err := page.save()
+	err = page.save()
 	if err != nil {
 		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
 		return
@@ -72,4 +84,13 @@ func renderTemplate(responseWriter http.ResponseWriter, viewFileName string, pag
 		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func getTitle(responseWriter http.ResponseWriter, request *http.Request) (string, error) {
+	m := validPath.FindStringSubmatch(request.URL.Path)
+	if m == nil {
+		http.NotFound(responseWriter, request)
+		return "", errors.New("invalid Page Title")
+	}
+	return m[2], nil
 }
