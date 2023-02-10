@@ -32,17 +32,24 @@ func loadPage(title string) (*Page, error) {
 }
 
 func main() {
-	http.HandleFunc("/view/", viewHandler)
-	http.HandleFunc("/edit/", editHandler)
-	http.HandleFunc("/save/", saveHandler)
+	http.HandleFunc("/view/", makeHandler(viewHandler))
+	http.HandleFunc("/edit/", makeHandler(editHandler))
+	http.HandleFunc("/save/", makeHandler(saveHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func viewHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title, err := getTitle(responseWriter, request)
-	if err != nil {
-		return
+func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		m := validPath.FindStringSubmatch(r.URL.Path)
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		fn(w, r, m[2])
 	}
+}
+
+func viewHandler(responseWriter http.ResponseWriter, request *http.Request, title string) {
 	page, err := loadPage(title)
 	if err != nil {
 		http.Redirect(responseWriter, request, "/edit/"+title, http.StatusFound)
@@ -51,11 +58,7 @@ func viewHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	renderTemplate(responseWriter, "view", page)
 }
 
-func editHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title, err := getTitle(responseWriter, request)
-	if err != nil {
-		return
-	}
+func editHandler(responseWriter http.ResponseWriter, request *http.Request, title string) {
 	page, err := loadPage(title)
 	if err != nil {
 		page = &Page{Title: title}
@@ -63,14 +66,10 @@ func editHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	renderTemplate(responseWriter, "edit", page)
 }
 
-func saveHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	title, err := getTitle(responseWriter, request)
-	if err != nil {
-		return
-	}
+func saveHandler(responseWriter http.ResponseWriter, request *http.Request, title string) {
 	body := request.FormValue("body")
 	page := &Page{Title: title, Body: []byte(body)}
-	err = page.save()
+	err := page.save()
 	if err != nil {
 		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
 		return
