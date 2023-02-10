@@ -84,12 +84,3 @@ func renderTemplate(responseWriter http.ResponseWriter, viewFileName string, pag
 		return
 	}
 }
-
-func getTitle(responseWriter http.ResponseWriter, request *http.Request) (string, error) {
-	m := validPath.FindStringSubmatch(request.URL.Path)
-	if m == nil {
-		http.NotFound(responseWriter, request)
-		return "", errors.New("invalid Page Title")
-	}
-	return m[2], nil
-}
